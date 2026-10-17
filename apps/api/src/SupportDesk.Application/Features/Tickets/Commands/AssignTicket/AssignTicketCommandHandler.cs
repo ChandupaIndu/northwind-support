@@ -11,19 +11,19 @@ namespace SupportDesk.Application.Features.Tickets.Commands.AssignTicket;
 /// Hands a ticket to an agent, or takes it back off them when no agent is given.
 /// </summary>
 /// <remarks>
-/// This is the manual override the team lead uses, so it deliberately does not check the
-/// category's specialist rule.
+/// Team leads can choose the owner, but cannot bypass category specialist requirements.
 /// </remarks>
 public sealed class AssignTicketCommandHandler(
     ITicketRepository tickets,
     IAgentRepository agents,
+    ICategoryRepository categories,
     IUnitOfWork unitOfWork,
     IClock clock,
     GetTicketQueryHandler getTicket,
     ILogger<AssignTicketCommandHandler> logger)
 {
     /// <exception cref="NotFoundException">The ticket or the agent does not exist.</exception>
-    /// <exception cref="ConflictException">The agent is inactive.</exception>
+    /// <exception cref="ConflictException">The agent is inactive or lacks a required specialization.</exception>
     public async Task<TicketDetailDto> HandleAsync(int id, AssignTicketRequest request, CancellationToken ct)
     {
         var ticket = await tickets.GetByIdAsync(id, ct) ?? throw new NotFoundException("Ticket", id);
@@ -36,6 +36,14 @@ public sealed class AssignTicketCommandHandler(
             {
                 throw new ConflictException(
                     $"Agent {agent.FullName} is not active and cannot take new tickets.");
+            }
+
+            var category = await categories.GetByIdAsync(ticket.CategoryId, ct)
+                ?? throw new NotFoundException("Category", ticket.CategoryId);
+            if (category.RequiresSpecialist && !agent.Specializations.Any(s => s.CategoryId == ticket.CategoryId))
+            {
+                throw new ConflictException(
+                    $"Agent {agent.FullName} is not qualified for the {category.Name} category.");
             }
         }
 

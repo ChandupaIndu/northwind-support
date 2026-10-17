@@ -5,6 +5,7 @@ import { useReferenceData } from '../../hooks/useReferenceData';
 import { AssignAgentControl } from './components/AssignAgentControl';
 import { StatusActions } from './components/StatusActions';
 import { TicketSummary } from './components/TicketSummary';
+import { TicketEscalationPanel } from './components/TicketEscalationPanel';
 import { useTicket } from './hooks/useTicket';
 
 export function TicketDetailPage() {
@@ -51,6 +52,7 @@ export function TicketDetailPage() {
           </div>
 
           <StatusActions ticket={ticket} onUpdated={setData} />
+          <TicketEscalationPanel ticket={ticket} onUpdated={setData} />
         </div>
 
         <aside className="detail-layout__side">

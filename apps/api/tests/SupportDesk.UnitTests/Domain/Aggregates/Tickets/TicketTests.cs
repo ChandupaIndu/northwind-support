@@ -99,4 +99,35 @@ public class TicketTests
         Assert.Null(ticket.AssignedAgentId);
         Assert.Equal(Later, ticket.UpdatedAtUtc);
     }
+
+    [Fact]
+    public void Escalate_IncreasesPriorityAndReplacesDueDateAndAssignment()
+    {
+        var ticket = new TicketBuilder().WithPriority(TicketPriority.Low).AssignedTo(4).Build();
+        var due = Later.AddHours(8);
+
+        ticket.Escalate(Later, due, 2);
+
+        Assert.Equal(TicketPriority.Medium, ticket.Priority);
+        Assert.Equal(due, ticket.DueAtUtc);
+        Assert.Equal(2, ticket.AssignedAgentId);
+        Assert.Equal(Later, ticket.UpdatedAtUtc);
+    }
+
+    [Theory]
+    [InlineData(TicketPriority.Critical, TicketStatus.Open, "Critical")]
+    [InlineData(TicketPriority.High, TicketStatus.Resolved, "Resolved")]
+    [InlineData(TicketPriority.High, TicketStatus.Closed, "Closed")]
+    public void Escalate_WhenTicketCannotEscalate_Throws(
+        TicketPriority priority,
+        TicketStatus status,
+        string explanation)
+    {
+        var ticket = new TicketBuilder().WithPriority(priority).WithStatus(status).Build();
+
+        var exception = Assert.Throws<BusinessRuleViolationException>(() => ticket.Escalate(Later, Later.AddHours(1), null));
+
+        Assert.Contains(explanation, exception.Message);
+        Assert.Equal(priority, ticket.Priority);
+    }
 }

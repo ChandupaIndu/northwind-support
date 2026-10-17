@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using SupportDesk.Application.Contracts.Tickets;
+using SupportDesk.Application.Abstractions;
 using SupportDesk.Domain.Aggregates.Agents;
 using SupportDesk.Domain.Aggregates.Categories;
 using SupportDesk.Domain.Aggregates.Customers;
@@ -14,6 +15,7 @@ namespace SupportDesk.UnitTests.Infrastructure.Queries;
 public sealed class TicketQueriesTests : IAsyncLifetime
 {
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
+    private readonly List<string> _sqlStatements = [];
     private SupportDbContext _db = null!;
     private Ticket[] _tickets = null!;
     private int _customerOneId;
@@ -22,12 +24,13 @@ public sealed class TicketQueriesTests : IAsyncLifetime
     private int _categoryTwoId;
     private int _agentOneId;
     private TicketQueries _queries = null!;
+    private TicketEscalationQueries _escalations = null!;
 
     public async Task InitializeAsync()
     {
         await _connection.OpenAsync();
         _db = new SupportDbContext(new DbContextOptionsBuilder<SupportDbContext>()
-            .UseSqlite(_connection).Options);
+            .UseSqlite(_connection).LogTo(message => _sqlStatements.Add(message)).Options);
         await _db.Database.EnsureCreatedAsync();
 
         var customerOne = new Customer("Acme Corporation", "acme@example.test", null, CustomerTier.Standard, FixedClock.DefaultNow);
@@ -58,7 +61,14 @@ public sealed class TicketQueriesTests : IAsyncLifetime
         _db.AddRange(_tickets);
         await _db.SaveChangesAsync();
         _db.ChangeTracker.Clear();
-        _queries = new TicketQueries(_db, new FixedClock());
+        _queries = new TicketQueries(_db, new FixedClock(), new SlaSettings
+        {
+            BaseWindowHours = new Dictionary<string, double>
+            {
+                ["Low"] = 72, ["Medium"] = 24, ["High"] = 8, ["Critical"] = 4
+            }
+        });
+        _escalations = new TicketEscalationQueries(_db);
     }
 
     public async Task DisposeAsync()
@@ -114,6 +124,87 @@ public sealed class TicketQueriesTests : IAsyncLifetime
 
         var tied = await Get(new TicketQuery { SortBy = "priority", SortDirection = "desc" });
         Assert.Equal(["TCK-1002", "TCK-1003", "TCK-1001", "TCK-1004"], tied.Items.Select(x => x.Reference));
+    }
+
+    [Fact]
+    public async Task Filters_sla_status_and_calculates_all_states_in_the_database_query()
+    {
+        await SetDueDate(_tickets[0], FixedClock.DefaultNow.AddHours(2));
+        await SetDueDate(_tickets[1], FixedClock.DefaultNow.AddHours(2));
+        await SetDueDate(_tickets[3], FixedClock.DefaultNow.AddHours(-1));
+
+        var atRisk = await Get(new TicketQuery { SlaStatus = SlaStatus.AtRisk });
+        Assert.Equal(1, atRisk.TotalCount);
+        Assert.Equal(["TCK-1001"], atRisk.Items.Select(x => x.Reference));
+        Assert.Contains(_sqlStatements, sql => sql.Contains("SELECT COUNT", StringComparison.OrdinalIgnoreCase) &&
+            sql.Contains("WHERE", StringComparison.OrdinalIgnoreCase) &&
+            sql.Contains("DueAtUtc", StringComparison.OrdinalIgnoreCase));
+
+        var within = await Get(new TicketQuery { SlaStatus = SlaStatus.WithinSla });
+        Assert.Equal(["TCK-1002"], within.Items.Select(x => x.Reference));
+        Assert.Equal(["TCK-1003"], (await Get(new TicketQuery { SlaStatus = SlaStatus.NotApplicable })).Items.Select(x => x.Reference));
+        Assert.Equal(["TCK-1004"], (await Get(new TicketQuery { SlaStatus = SlaStatus.Breached })).Items.Select(x => x.Reference));
+
+        await SetDueDate(_tickets[3], FixedClock.DefaultNow.AddHours(1));
+        var met = await Get(new TicketQuery { SlaStatus = SlaStatus.Met });
+        Assert.Equal(["TCK-1004"], met.Items.Select(x => x.Reference));
+    }
+
+    [Fact]
+    public async Task Sla_filter_includes_exact_due_time_as_at_risk_and_excludes_it_as_breached()
+    {
+        await SetDueDate(_tickets[0], FixedClock.DefaultNow);
+
+        var atRisk = await Get(new TicketQuery { SlaStatus = SlaStatus.AtRisk });
+        var breached = await Get(new TicketQuery { SlaStatus = SlaStatus.Breached });
+
+        Assert.Contains(atRisk.Items, ticket => ticket.Reference == "TCK-1001");
+        Assert.DoesNotContain(breached.Items, ticket => ticket.Reference == "TCK-1001");
+    }
+
+    [Fact]
+    public async Task Sla_filter_treats_exactly_25_percent_remaining_as_at_risk()
+    {
+        // TCK-1001 is High priority with an eight-hour window, so two hours is exactly 25%.
+        await SetDueDate(_tickets[0], FixedClock.DefaultNow.AddHours(2));
+        await SetDueDate(_tickets[1], FixedClock.DefaultNow.AddHours(2).AddSeconds(1));
+
+        var atRisk = await Get(new TicketQuery { SlaStatus = SlaStatus.AtRisk });
+        var withinSla = await Get(new TicketQuery { SlaStatus = SlaStatus.WithinSla });
+
+        Assert.Contains(atRisk.Items, ticket => ticket.Reference == "TCK-1001");
+        Assert.DoesNotContain(atRisk.Items, ticket => ticket.Reference == "TCK-1002");
+        Assert.Contains(withinSla.Items, ticket => ticket.Reference == "TCK-1002");
+    }
+
+    [Fact]
+    public async Task Escalation_history_is_projected_with_agent_names_newest_first()
+    {
+        var older = TicketEscalation.Record(_tickets[0].Id, TicketPriority.Medium, TicketPriority.High,
+            null, _agentOneId, null, FixedClock.DefaultNow.AddHours(8), "Older reason", "Lead", FixedClock.DefaultNow.AddHours(-2));
+        var newer = TicketEscalation.Record(_tickets[0].Id, TicketPriority.High, TicketPriority.Critical,
+            _agentOneId, null, FixedClock.DefaultNow.AddHours(8), FixedClock.DefaultNow.AddHours(4), "Newer reason", "Lead", FixedClock.DefaultNow.AddHours(-1));
+        _db.AddRange(older, newer);
+        await _db.SaveChangesAsync();
+        _db.ChangeTracker.Clear();
+
+        var history = await _escalations.GetHistoryAsync(_tickets[0].Id, CancellationToken.None);
+
+        Assert.Equal(["Newer reason", "Older reason"], history.Select(x => x.Reason));
+        Assert.Null(history[0].ToAgentName);
+        Assert.Equal("Ada Lovelace", history[0].FromAgentName);
+        Assert.Equal(_agentOneId, history[1].ToAgentId);
+        Assert.Equal("Ada Lovelace", history[1].ToAgentName);
+    }
+
+    private async Task SetDueDate(Ticket ticket, DateTime? dueAtUtc)
+    {
+        var entry = _db.Attach(ticket);
+        entry.Property(x => x.DueAtUtc).CurrentValue = dueAtUtc;
+        entry.Property(x => x.DueAtUtc).IsModified = true;
+        await _db.SaveChangesAsync();
+        _db.ChangeTracker.Clear();
+        _sqlStatements.Clear();
     }
 
     private Task<SupportDesk.Application.Contracts.Common.PagedResult<TicketListItemDto>> Get(TicketQuery query) =>

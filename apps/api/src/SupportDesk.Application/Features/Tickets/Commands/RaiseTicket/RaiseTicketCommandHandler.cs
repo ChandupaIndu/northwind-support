@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using SupportDesk.Application.Abstractions;
+using SupportDesk.Application.Features.Tickets;
 using SupportDesk.Application.Contracts.Tickets;
 using SupportDesk.Application.Exceptions;
 using SupportDesk.Application.Features.Tickets.Queries.GetTicket;
@@ -17,6 +18,7 @@ public sealed class RaiseTicketCommandHandler(
     ICategoryRepository categories,
     IUnitOfWork unitOfWork,
     IClock clock,
+    ITicketTriageService triage,
     GetTicketQueryHandler getTicket,
     ILogger<RaiseTicketCommandHandler> logger)
 {
@@ -33,16 +35,25 @@ public sealed class RaiseTicketCommandHandler(
             throw new NotFoundException("Category", request.CategoryId);
         }
 
-        // The response window is still worked out by hand by the team lead, so a new ticket
-        // starts with no due date and no owner.
+        var now = clock.UtcNow;
+        var decision = await triage.DecideAsync(
+            request.RequestedPriority ?? TicketPriority.Medium,
+            request.CustomerId,
+            request.CategoryId,
+            excludingTicketId: null,
+            currentAgentId: null,
+            now,
+            ct);
+
         var ticket = Ticket.Raise(
             await tickets.NextReferenceAsync(ct),
             request.Title,
             request.Description,
             request.CustomerId,
             request.CategoryId,
-            request.RequestedPriority ?? TicketPriority.Medium,
-            clock.UtcNow);
+            decision.Priority,
+            now);
+        ticket.ApplyTriage(decision.Priority, decision.DueAtUtc, decision.AssignedAgentId, now);
 
         await tickets.AddAsync(ticket, ct);
         await unitOfWork.SaveChangesAsync(ct);
@@ -51,6 +62,16 @@ public sealed class RaiseTicketCommandHandler(
             "Ticket {Reference} raised for customer {CustomerId} in category {CategoryId}.",
             ticket.Reference, ticket.CustomerId, ticket.CategoryId);
 
-        return await getTicket.HandleAsync(ticket.Id, ct);
+        var result = await getTicket.HandleAsync(ticket.Id, ct);
+        result.Triage = new TicketTriageDto(
+            decision.Priority,
+            decision.PriorityReason,
+            decision.SlaWindowHours,
+            decision.SlaReason,
+            decision.AssignmentReason,
+            decision.AssignedAgentId is null ? null : new AgentSummaryDto(decision.AssignedAgentId.Value, decision.AssignedAgentName!),
+            decision.DueAtUtc,
+            decision.SlaStatus);
+        return result;
     }
 }

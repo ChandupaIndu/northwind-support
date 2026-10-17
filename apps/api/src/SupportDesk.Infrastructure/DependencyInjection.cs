@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using System.Globalization;
 using SupportDesk.Application.Abstractions;
+using SupportDesk.Application.Features.Tickets;
 using SupportDesk.Domain.Repositories;
 using SupportDesk.Infrastructure.Data;
 using SupportDesk.Infrastructure.Queries;
@@ -27,16 +29,30 @@ public static class DependencyInjection
         services.AddDbContext<SupportDbContext>(options =>
             options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure()));
 
+        var sla = configuration.GetSection("Sla");
+        var windowSettings = sla.GetSection("BaseWindowHours").GetChildren()
+            .ToDictionary(section => section.Key, section => double.Parse(section.Value!, CultureInfo.InvariantCulture));
+        services.AddSingleton(new SlaSettings
+        {
+            BaseWindowHours = windowSettings,
+            PremiumCustomerMultiplier = ReadSlaNumber(sla, "PremiumCustomerMultiplier", 0.5),
+            MinimumWindowHours = ReadSlaNumber(sla, "MinimumWindowHours", 1),
+            AtRiskThresholdPercent = ReadSlaNumber(sla, "AtRiskThresholdPercent", 25)
+        });
+
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<SupportDbContext>());
 
         services.AddSingleton<IClock, SystemClock>();
 
         services.AddScoped<ITicketRepository, TicketRepository>();
-        services.AddScoped<IAgentRepository, AgentRepository>();
+        services.AddScoped<AgentRepository>();
+        services.AddScoped<IAgentRepository>(sp => sp.GetRequiredService<AgentRepository>());
+        services.AddScoped<IAgentAssignmentCandidates>(sp => sp.GetRequiredService<AgentRepository>());
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<ICategoryRepository, CategoryRepository>();
 
         services.AddScoped<ITicketQueries, TicketQueries>();
+        services.AddScoped<ITicketEscalationQueries, TicketEscalationQueries>();
         services.AddScoped<ICustomerQueries, CustomerQueries>();
         services.AddScoped<IAgentQueries, AgentQueries>();
         services.AddScoped<ICategoryQueries, CategoryQueries>();
@@ -45,4 +61,7 @@ public static class DependencyInjection
 
         return services;
     }
+
+    private static double ReadSlaNumber(IConfigurationSection section, string key, double fallback) =>
+        double.TryParse(section[key], CultureInfo.InvariantCulture, out var value) ? value : fallback;
 }

@@ -41,7 +41,7 @@ public sealed class EscalateTicketCommandHandlerTests
             new GetTicketQueryHandler(queries.Object));
 
         var result = await handler.HandleAsync(ticket.Id,
-            new EscalateTicketRequest("Customer impact increased.", "Team lead"), CancellationToken.None);
+            new EscalateTicketRequest("Customer impact increased."), "Team lead", CancellationToken.None);
 
         Assert.Equal(TicketPriority.High, ticket.Priority);
         Assert.Equal(now.AddHours(8), ticket.DueAtUtc);
@@ -76,7 +76,7 @@ public sealed class EscalateTicketCommandHandlerTests
             new FixedClock(), new GetTicketQueryHandler(new Mock<ITicketQueries>().Object));
 
         await Assert.ThrowsAsync<ConflictException>(() =>
-            handler.HandleAsync(ticket.Id, new EscalateTicketRequest("Valid reason", "Lead"), CancellationToken.None));
+            handler.HandleAsync(ticket.Id, new EscalateTicketRequest("Valid reason"), "Lead", CancellationToken.None));
 
         triage.Verify(x => x.DecideAsync(It.IsAny<TicketPriority>(), It.IsAny<int>(), It.IsAny<int>(),
             It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -84,14 +84,13 @@ public sealed class EscalateTicketCommandHandlerTests
     }
 
     [Fact]
-    public async Task Validator_RejectsShortReasonAndMissingActor()
+    public async Task Validator_RejectsShortReason()
     {
         var validator = new EscalateTicketRequestValidator();
 
-        var result = await validator.ValidateAsync(new EscalateTicketRequest("bad", " "));
+        var result = await validator.ValidateAsync(new EscalateTicketRequest("bad"));
 
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, error => error.PropertyName == "Reason");
-        Assert.Contains(result.Errors, error => error.PropertyName == "EscalatedBy");
     }
 }

@@ -15,7 +15,11 @@ public sealed class EscalateTicketCommandHandler(
     IClock clock,
     GetTicketQueryHandler getTicket)
 {
-    public async Task<EscalateTicketResultDto> HandleAsync(int id, EscalateTicketRequest request, CancellationToken ct)
+    public async Task<EscalateTicketResultDto> HandleAsync(
+        int id,
+        EscalateTicketRequest request,
+        string escalatedBy,
+        CancellationToken ct)
     {
         var ticket = await tickets.GetByIdAsync(id, ct) ?? throw new NotFoundException("Ticket", id);
         if (ticket.Status is TicketStatus.Resolved or TicketStatus.Closed)
@@ -49,7 +53,7 @@ public sealed class EscalateTicketCommandHandler(
             fromDueAtUtc,
             ticket.DueAtUtc,
             request.Reason!,
-            request.EscalatedBy!,
+            escalatedBy,
             now);
         await tickets.AddEscalationAsync(history, ct);
         await unitOfWork.SaveChangesAsync(ct);

@@ -9,6 +9,9 @@ using SupportDesk.Infrastructure.Data;
 using SupportDesk.Infrastructure.Queries;
 using SupportDesk.Infrastructure.Repositories;
 using SupportDesk.Infrastructure.Services;
+using Microsoft.AspNetCore.Identity;
+using SupportDesk.Domain.Aggregates.Agents;
+using SupportDesk.Infrastructure.Security;
 
 namespace SupportDesk.Infrastructure;
 
@@ -25,6 +28,8 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("Default")
             ?? throw new InvalidOperationException(
                 "Connection string 'Default' is missing. See README.md for local setup.");
+
+        services.AddSingleton(JwtSettings.FromConfiguration(configuration));
 
         services.AddDbContext<SupportDbContext>(options =>
             options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure()));
@@ -43,6 +48,9 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<SupportDbContext>());
 
         services.AddSingleton<IClock, SystemClock>();
+        services.AddSingleton<IPasswordHasher<Agent>, PasswordHasher<Agent>>();
+        services.AddScoped<IAgentPasswordHasher, IdentityAgentPasswordHasher>();
+        services.AddSingleton<IJwtTokenIssuer, JwtTokenIssuer>();
 
         services.AddScoped<ITicketRepository, TicketRepository>();
         services.AddScoped<AgentRepository>();

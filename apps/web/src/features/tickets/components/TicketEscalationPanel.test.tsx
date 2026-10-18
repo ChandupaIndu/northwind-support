@@ -35,7 +35,6 @@ describe('TicketEscalationPanel', () => {
     render(<TicketEscalationPanel ticket={ticket()} onUpdated={vi.fn()} />);
 
     fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'Nope' } });
-    fireEvent.change(screen.getByLabelText('Escalated by'), { target: { value: 'Team lead' } });
     fireEvent.click(screen.getByRole('button', { name: 'Escalate ticket' }));
 
     expect(await screen.findByText('Reason must be between 5 and 500 characters.')).toBeInTheDocument();
@@ -50,7 +49,6 @@ describe('TicketEscalationPanel', () => {
     render(<TicketEscalationPanel ticket={currentTicket} onUpdated={onUpdated} />);
 
     fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'Customer impact increased.' } });
-    fireEvent.change(screen.getByLabelText('Escalated by'), { target: { value: 'Team lead' } });
     fireEvent.click(screen.getByRole('button', { name: 'Escalate ticket' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Critical tickets cannot be escalated.');
@@ -102,7 +100,6 @@ describe('TicketEscalationPanel', () => {
     render(<TicketEscalationPanel ticket={currentTicket} onUpdated={onUpdated} />);
 
     fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'Customer impact increased.' } });
-    fireEvent.change(screen.getByLabelText('Escalated by'), { target: { value: 'Team lead' } });
     fireEvent.click(screen.getByRole('button', { name: 'Escalate ticket' }));
 
     await waitFor(() => expect(onUpdated).toHaveBeenCalledWith(escalatedTicket));

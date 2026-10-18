@@ -2,6 +2,7 @@ using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using SupportDesk.Application.Abstractions;
 using SupportDesk.Application.Features.Agents.Queries.GetAgents;
+using SupportDesk.Application.Features.Auth;
 using SupportDesk.Application.Features.Categories.Queries.GetCategories;
 using SupportDesk.Application.Features.Customers.Queries.GetCustomer;
 using SupportDesk.Application.Features.Customers.Queries.GetCustomers;
@@ -38,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<GetAgentsQueryHandler>();
 
         services.AddScoped<GetCategoriesQueryHandler>();
+        services.AddScoped<LoginCommandHandler>();
 
         services.AddValidatorsFromAssemblyContaining<RaiseTicketCommandHandler>(ServiceLifetime.Singleton);
 

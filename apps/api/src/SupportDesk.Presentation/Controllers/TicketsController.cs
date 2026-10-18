@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using SupportDesk.Application.Contracts.Common;
 using SupportDesk.Application.Contracts.Tickets;
 using SupportDesk.Application.Features.Tickets.Commands.AssignTicket;
@@ -61,12 +62,20 @@ public sealed class TicketsController : ControllerBase
 
     /// <summary>Raises a ticket's priority and records why and who requested it.</summary>
     [HttpPost("{id:int}/escalate")]
-    public Task<EscalateTicketResultDto> Escalate(
+    public async Task<ActionResult<EscalateTicketResultDto>> Escalate(
         int id,
         EscalateTicketRequest request,
         [FromServices] EscalateTicketCommandHandler handler,
-        CancellationToken ct) =>
-        handler.HandleAsync(id, request, ct);
+        CancellationToken ct)
+    {
+        var actor = User.FindFirst("name")?.Value ?? User.FindFirst(ClaimTypes.Name)?.Value;
+        if (string.IsNullOrWhiteSpace(actor))
+        {
+            return Forbid();
+        }
+
+        return await handler.HandleAsync(id, request, actor, ct);
+    }
 
     /// <summary>Returns the immutable escalation history, newest first.</summary>
     [HttpGet("{id:int}/escalations")]

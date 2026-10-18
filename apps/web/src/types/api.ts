@@ -15,6 +15,18 @@ export type TicketSortField = 'createdAtUtc' | 'updatedAtUtc' | 'dueAtUtc' | 'pr
 
 export type SortDirection = 'asc' | 'desc';
 
+export interface AuthenticatedAgent {
+  id: number;
+  fullName: string;
+  email: string;
+}
+
+export interface LoginResponse {
+  accessToken: string;
+  expiresAtUtc: string;
+  agent: AuthenticatedAgent;
+}
+
 export interface PagedResult<T> {
   items: T[];
   page: number;

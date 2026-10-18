@@ -15,6 +15,13 @@ public sealed class AgentRepository(SupportDbContext db) : IAgentRepository, IAg
             .Include(a => a.Specializations)
             .FirstOrDefaultAsync(a => a.Id == id, ct);
 
+    public Task<Agent?> GetByEmailAsync(string email, CancellationToken ct)
+    {
+        var normalizedEmail = email.Trim().ToUpperInvariant();
+        return db.Set<Agent>()
+            .FirstOrDefaultAsync(agent => agent.Email.ToUpper() == normalizedEmail, ct);
+    }
+
     public async Task<IReadOnlyList<AgentAssignmentCandidate>> GetAsync(int? excludingTicketId, CancellationToken ct)
     {
         var agents = await db.Set<Agent>().AsNoTracking().Include(a => a.Specializations).ToListAsync(ct);

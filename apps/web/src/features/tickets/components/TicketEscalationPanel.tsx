@@ -12,7 +12,6 @@ interface TicketEscalationPanelProps {
 /** Escalation form and its immutable audit history. */
 export function TicketEscalationPanel({ ticket, onUpdated }: TicketEscalationPanelProps) {
   const [reason, setReason] = useState('');
-  const [escalatedBy, setEscalatedBy] = useState('');
   const [history, setHistory] = useState<TicketEscalation[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [historyError, setHistoryError] = useState<string>();
@@ -57,13 +56,8 @@ export function TicketEscalationPanel({ ticket, onUpdated }: TicketEscalationPan
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const cleanReason = reason.trim();
-    const cleanActor = escalatedBy.trim();
     if (cleanReason.length < 5 || cleanReason.length > 500) {
       setValidationError('Reason must be between 5 and 500 characters.');
-      return;
-    }
-    if (cleanActor.length < 1 || cleanActor.length > 100) {
-      setValidationError('Enter who is requesting this escalation (up to 100 characters).');
       return;
     }
 
@@ -71,7 +65,7 @@ export function TicketEscalationPanel({ ticket, onUpdated }: TicketEscalationPan
     setSubmitError(undefined);
     setIsSaving(true);
     try {
-      const result = await ticketsApi.escalate(ticket.id, cleanReason, cleanActor);
+      const result = await ticketsApi.escalate(ticket.id, cleanReason);
       onUpdated(result.ticket);
       setReason('');
       await reloadHistory();
@@ -98,15 +92,6 @@ export function TicketEscalationPanel({ ticket, onUpdated }: TicketEscalationPan
               rows={3}
               onChange={(event) => setReason(event.target.value)}
               aria-describedby={validationError ? 'escalation-error' : undefined}
-            />
-          </div>
-          <div className="field">
-            <label className="field__label" htmlFor="escalation-actor">Escalated by</label>
-            <input
-              id="escalation-actor"
-              value={escalatedBy}
-              maxLength={100}
-              onChange={(event) => setEscalatedBy(event.target.value)}
             />
           </div>
           {validationError && <p id="escalation-error" className="field__error" role="alert">{validationError}</p>}

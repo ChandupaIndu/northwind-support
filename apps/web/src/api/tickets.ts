@@ -63,10 +63,10 @@ export const ticketsApi = {
       body: JSON.stringify({ agentId }),
     }),
 
-  escalate: (id: number, reason: string, escalatedBy: string) =>
+  escalate: (id: number, reason: string) =>
     request<EscalateTicketResult>(`/tickets/${id}/escalate`, {
       method: 'POST',
-      body: JSON.stringify({ reason, escalatedBy }),
+      body: JSON.stringify({ reason }),
     }),
 
   getEscalations: (id: number) => request<TicketEscalation[]>(`/tickets/${id}/escalations`),

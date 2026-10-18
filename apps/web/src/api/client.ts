@@ -1,4 +1,5 @@
 import type { ProblemDetails } from '../types/api';
+import { AUTH_EXPIRED_EVENT, clearAuthSession, getAccessToken } from '../auth/authSession';
 
 /**
  * Where the API lives. In development this stays '/api' and the Vite dev server proxies it
@@ -30,15 +31,21 @@ export class ApiError extends Error {
  * {@link ApiError} that callers can show to the user.
  */
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getAccessToken();
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
   });
 
   if (!response.ok) {
+    if (response.status === 401 && path.split('?')[0] !== '/auth/login') {
+      clearAuthSession();
+      window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+    }
     const problem = await readProblem(response);
 
     throw new ApiError(

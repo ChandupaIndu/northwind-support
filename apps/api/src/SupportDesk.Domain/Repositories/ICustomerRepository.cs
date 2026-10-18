@@ -8,4 +8,5 @@ namespace SupportDesk.Domain.Repositories;
 public interface ICustomerRepository
 {
     Task<bool> ExistsAsync(int id, CancellationToken ct);
+    Task<SupportDesk.Domain.Aggregates.Customers.Customer?> GetByIdAsync(int id, CancellationToken ct);
 }

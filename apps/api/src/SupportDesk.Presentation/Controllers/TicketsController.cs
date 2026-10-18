@@ -1,10 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using SupportDesk.Application.Contracts.Common;
 using SupportDesk.Application.Contracts.Tickets;
 using SupportDesk.Application.Features.Tickets.Commands.AssignTicket;
 using SupportDesk.Application.Features.Tickets.Commands.ChangeTicketStatus;
+using SupportDesk.Application.Features.Tickets.Commands.EscalateTicket;
 using SupportDesk.Application.Features.Tickets.Commands.RaiseTicket;
 using SupportDesk.Application.Features.Tickets.Queries.GetTicket;
+using SupportDesk.Application.Features.Tickets.Queries.GetTicketEscalations;
 using SupportDesk.Application.Features.Tickets.Queries.SearchTickets;
 
 namespace SupportDesk.Presentation.Controllers;
@@ -56,4 +59,29 @@ public sealed class TicketsController : ControllerBase
         [FromServices] AssignTicketCommandHandler handler,
         CancellationToken ct) =>
         handler.HandleAsync(id, request, ct);
+
+    /// <summary>Raises a ticket's priority and records why and who requested it.</summary>
+    [HttpPost("{id:int}/escalate")]
+    public async Task<ActionResult<EscalateTicketResultDto>> Escalate(
+        int id,
+        EscalateTicketRequest request,
+        [FromServices] EscalateTicketCommandHandler handler,
+        CancellationToken ct)
+    {
+        var actor = User.FindFirst("name")?.Value ?? User.FindFirst(ClaimTypes.Name)?.Value;
+        if (string.IsNullOrWhiteSpace(actor))
+        {
+            return Forbid();
+        }
+
+        return await handler.HandleAsync(id, request, actor, ct);
+    }
+
+    /// <summary>Returns the immutable escalation history, newest first.</summary>
+    [HttpGet("{id:int}/escalations")]
+    public Task<IReadOnlyList<TicketEscalationDto>> GetEscalations(
+        int id,
+        [FromServices] GetTicketEscalationsQueryHandler handler,
+        CancellationToken ct) =>
+        handler.HandleAsync(id, ct);
 }

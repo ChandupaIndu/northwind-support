@@ -15,6 +15,18 @@ export type TicketSortField = 'createdAtUtc' | 'updatedAtUtc' | 'dueAtUtc' | 'pr
 
 export type SortDirection = 'asc' | 'desc';
 
+export interface AuthenticatedAgent {
+  id: number;
+  fullName: string;
+  email: string;
+}
+
+export interface LoginResponse {
+  accessToken: string;
+  expiresAtUtc: string;
+  agent: AuthenticatedAgent;
+}
+
 export interface PagedResult<T> {
   items: T[];
   page: number;
@@ -79,6 +91,39 @@ export interface TicketDetail {
   dueAtUtc: string | null;
   resolvedAtUtc: string | null;
   slaStatus: SlaStatus;
+  triage?: TicketTriage | null;
+}
+
+export interface TicketTriage {
+  priority: TicketPriority;
+  priorityReason: string;
+  slaWindowHours: number;
+  slaReason: string;
+  assignmentReason: string;
+  assignedAgent: AgentSummary | null;
+  dueAtUtc: string | null;
+  slaStatus: SlaStatus;
+}
+
+export interface TicketEscalation {
+  id: number;
+  ticketId: number;
+  fromPriority: TicketPriority;
+  toPriority: TicketPriority;
+  fromAgentId: number | null;
+  fromAgentName: string | null;
+  toAgentId: number | null;
+  toAgentName: string | null;
+  fromDueAtUtc: string | null;
+  toDueAtUtc: string | null;
+  reason: string;
+  escalatedBy: string;
+  escalatedAtUtc: string;
+}
+
+export interface EscalateTicketResult {
+  ticket: TicketDetail;
+  escalation: TicketEscalation;
 }
 
 /** Everything the ticket list screen can narrow the results by. */
@@ -90,6 +135,7 @@ export interface TicketFilters {
   customerId?: number;
   assignedAgentId?: number;
   unassignedOnly?: boolean;
+  slaStatus?: SlaStatus;
   page: number;
   pageSize: number;
   sortBy: TicketSortField;

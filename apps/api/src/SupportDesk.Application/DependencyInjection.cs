@@ -1,13 +1,18 @@
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using SupportDesk.Application.Abstractions;
 using SupportDesk.Application.Features.Agents.Queries.GetAgents;
+using SupportDesk.Application.Features.Auth;
 using SupportDesk.Application.Features.Categories.Queries.GetCategories;
 using SupportDesk.Application.Features.Customers.Queries.GetCustomer;
 using SupportDesk.Application.Features.Customers.Queries.GetCustomers;
 using SupportDesk.Application.Features.Tickets.Commands.AssignTicket;
 using SupportDesk.Application.Features.Tickets.Commands.ChangeTicketStatus;
+using SupportDesk.Application.Features.Tickets.Commands.EscalateTicket;
 using SupportDesk.Application.Features.Tickets.Commands.RaiseTicket;
+using SupportDesk.Application.Features.Tickets;
 using SupportDesk.Application.Features.Tickets.Queries.GetTicket;
+using SupportDesk.Application.Features.Tickets.Queries.GetTicketEscalations;
 using SupportDesk.Application.Features.Tickets.Queries.SearchTickets;
 
 namespace SupportDesk.Application;
@@ -20,8 +25,11 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<RaiseTicketCommandHandler>();
+        services.AddScoped<ITicketTriageService, TicketTriageService>();
         services.AddScoped<ChangeTicketStatusCommandHandler>();
         services.AddScoped<AssignTicketCommandHandler>();
+        services.AddScoped<EscalateTicketCommandHandler>();
+        services.AddScoped<GetTicketEscalationsQueryHandler>();
         services.AddScoped<SearchTicketsQueryHandler>();
         services.AddScoped<GetTicketQueryHandler>();
 
@@ -31,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<GetAgentsQueryHandler>();
 
         services.AddScoped<GetCategoriesQueryHandler>();
+        services.AddScoped<LoginCommandHandler>();
 
         services.AddValidatorsFromAssemblyContaining<RaiseTicketCommandHandler>(ServiceLifetime.Singleton);
 

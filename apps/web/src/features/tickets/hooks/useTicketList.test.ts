@@ -73,4 +73,20 @@ describe('useTicketList', () => {
       expect.objectContaining({ status: 'InProgress' }),
     );
   });
+
+  it('reloads immediately when the SLA filter changes', async () => {
+    const { result } = renderHook(() => useTicketList());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+
+    act(() => {
+      result.current.updateFilters({ slaStatus: 'AtRisk' });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(getTickets).toHaveBeenLastCalledWith(expect.objectContaining({ slaStatus: 'AtRisk' }));
+  });
 });

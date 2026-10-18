@@ -49,4 +49,21 @@ public class AssignTicketCommandHandlerTests
         Assert.Null(ticket.AssignedAgentId);
         context.VerifySaved(Times.Never());
     }
+
+    [Fact]
+    public async Task HandleAsync_WhenSpecialistIsRequired_RejectsAnUnqualifiedAgent()
+    {
+        var context = new TicketCommandTestContext();
+        var ticket = context.ExistingTicket(new TicketBuilder().Build());
+        context.ExistingAgent(id: 4, fullName: "Sara Lindqvist");
+        context.Categories.Setup(c => c.GetByIdAsync(ticket.CategoryId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SupportDesk.Domain.Aggregates.Categories.Category("Billing", true, false));
+
+        var exception = await Assert.ThrowsAsync<ConflictException>(
+            () => context.AssignTicket.HandleAsync(ticket.Id, new AssignTicketRequest(4), CancellationToken.None));
+
+        Assert.Contains("not qualified", exception.Message);
+        Assert.Null(ticket.AssignedAgentId);
+        context.VerifySaved(Times.Never());
+    }
 }

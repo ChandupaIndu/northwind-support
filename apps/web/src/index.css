@@ -65,6 +65,24 @@ a {
   gap: 16px;
 }
 
+.app__account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: min(100%, 420px);
+}
+
 .app__nav a {
   text-decoration: none;
   padding: 4px 2px;
